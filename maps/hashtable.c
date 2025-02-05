@@ -10,6 +10,7 @@
 
 #define INITIAL_SIZE (1 << 3)
 //#define INITIAL_SIZE (1 << 17)
+#define MAX_LOAD 2
 
 typedef struct Entry Entry;
 struct Entry {
@@ -108,6 +109,10 @@ entry_destroy(Entry *entry)
 void
 ht_put(Hashtable *h, char *key, int value)
 {
+  //printf("putting\n");
+  if (should_resize(h)) {
+    resize(h, h->capacity * 2);
+  }
   uint64_t hash = compute_hash(key);
   Entry *entry = h->entries[hash % h->capacity],
     *newentry = entry_create(key, value, entry),
@@ -193,5 +198,55 @@ ht_entry_value(Entry *entry)
 {
   if (!entry) error("ht_entry_key: entry is NULL");
   return entry->value;
+}
+
+int should_resize(Hashtable *table) {
+  return table->size / table->capacity > MAX_LOAD;
+}
+
+int resize(Hashtable *table, uint64_t size) {
+  printf("resizing\n");
+  if (size <= table->capacity) { //don't let it get smaller
+    return -1;
+  }
+  printf("creating new\n");
+  Entry** new_array =  calloc(size, sizeof(*(table->entries)));
+  for (int i = 0; i < table->capacity; i++) {
+    printf("start with iterating number %d\n", i);
+    Entry* current = table->entries[i];
+    if (current) {
+    printf("key: %s, value %d\n", current->key, current->value);
+      
+    }
+
+    while (current) {
+      char* key = current->key;
+      printf("key: %s, value %d\n", current->key, current->value);
+      uint64_t hash = compute_hash(current->key);
+      Entry* new_entry_current = new_array[hash % size];
+      if (!new_entry_current) {
+        printf("bucket empty\n");
+        new_array[hash % size] = current;
+      } else {
+        printf("bucket already occupied\n");
+        while(new_entry_current->next) {
+          new_entry_current = new_entry_current->next;
+        }
+        new_entry_current->next = current;
+      }
+      Entry* next = current->next;
+      current->next = NULL;
+      current = next;
+      printf("done with %s\n", key);
+    }
+    printf("done with iterating number %d\n", i);
+  }
+  printf("done with iterating\n");
+  free(table->entries);
+  printf("freed old table\n");
+  table->entries = new_array;
+  table->capacity = size;
+  printf("done resizing\n");
+  return 0;
 }
 
